@@ -26,7 +26,8 @@ const JSONTCP = 'jsontcp';
 const MQTT = 'mqtt';
 const WOL = 'wol';
 const MDNS = 'mDNS';
-const { ProcessingManager, httpgetProcessor, httprestProcessor, httpgetSoapProcessor, httppostProcessor, cliProcessor, staticProcessor, webSocketProcessor, jsontcpProcessor, mqttProcessor, socketIOProcessor, mDNSProcessor, wolProcessor, replProcessor } = require('./ProcessingManager');
+const dnssd = 'dnssd';
+const { ProcessingManager, httpgetProcessor, httprestProcessor, httpgetSoapProcessor, httppostProcessor, cliProcessor, staticProcessor, webSocketProcessor, jsontcpProcessor, mqttProcessor, socketIOProcessor, mDNSProcessor, dnssdProcessor, wolProcessor, replProcessor } = require('./ProcessingManager');
 const { metaMessage, LOG_TYPE } = require("./metaMessage");
 
 const processingManager = new ProcessingManager();
@@ -43,6 +44,7 @@ const myMqttProcessor = new mqttProcessor();
 const myReplProcessor = new replProcessor();
 const myHttprestProcessor = new httprestProcessor();
 const myMDNSProcessor = new mDNSProcessor();
+const mydnssdProcessor = new dnssdProcessor();
 
 //LOGGING SETUP AND WRAPPING
 //Disable the NEEO library console warning.
@@ -340,6 +342,9 @@ module.exports = function controller(driver) {
     else if (commandtype == MDNS) {
       processingManager.processor = myMDNSProcessor;
     }
+    else if (commandtype == dnssd) {
+      processingManager.processor = mydnssdProcessor;
+    }
     else if (commandtype == JSONTCP) {
       processingManager.processor = myJsontcpProcessor;
     }
@@ -355,6 +360,7 @@ module.exports = function controller(driver) {
   this.initiateProcessor = function(commandtype, deviceId) { // Initiate communication protocoles
     return new Promise(function (resolve, reject) {
       self.assignProcessor(commandtype); //to get the correct processing manager.
+
       processingManager.initiate(self.getConnection(commandtype, deviceId))
         .then((result) => {
           resolve(result);

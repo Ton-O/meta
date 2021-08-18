@@ -18,6 +18,8 @@ const meta = require(path.join(__dirname,'meta'));
 const { metaMessage, LOG_TYPE } = require("./metaMessage");
 const { startsWith } = require("lodash");
 const { retry } = require("statuses");
+const { MDNSServiceDiscovery } = require('tinkerhub-mdns');
+
 console.error = console.info = console.debug = console.warn = console.trace = console.dir = console.dirxml = console.group = console.groupEnd = console.time = console.timeEnd = console.assert = console.profile = function() {};
 function metaLog(message) {
   let initMessage = { component:'processingManager', type:LOG_TYPE.INFO, content:'', deviceId: null };
@@ -28,19 +30,25 @@ function metaLog(message) {
 //STRATEGY FOR THE COMMAND TO BE USED (HTTPGET, post, websocket, ...) New processor to be added here. This strategy mix both transport and data format (json, soap, ...)
 class ProcessingManager {
   constructor() {
+    console.log("clear processor")
+
     this._processor = null;
   };
   set processor(processor) {
+    console.log("Set processor",processor)
     this._processor = processor;
   };
   get processor() {
+    console.log("get processor",this.processor)
+
     return this._processor;
   }
   initiate(connection) {
+    console.log("initiate in pm.js",connection)
     return new Promise((resolve, reject) => {
       this._processor.initiate(connection)
-        .then((result) => { resolve(result); })
-        .catch((err) => reject(err));
+        .then((result) => { console.log("Okay"); resolve(result); })
+        .catch((err) => {console.log("Fail"); reject(err)});
     });
   }
   process(params) {
@@ -844,6 +852,85 @@ class mDNSProcessor {
 }
 exports.mDNSProcessor = mDNSProcessor;
 
+class dnssdProcessor {
+  initiate(connection) {
+    return new Promise(function (resolve, reject) {
+      resolve();
+    });
+  }
+  process(params) {
+    return new Promise(function (resolve, reject) {
+      try {
+      var Services = [];
+      const discovery = new MDNSServiceDiscovery({
+        type: params.command // type: 'xbmc-jsonrpc-h' //
+      });
+      // Listen for services as they become available
+
+      discovery.onAvailable(service => {
+          try {
+          Services.push(service);
+          }
+          catch(err) {console.log("Error in push process", err)}
+
+      });
+
+      setTimeout(() => {
+          discovery.destroy();
+      resolve(Services)
+      }, 3000);
+
+    discovery.search();
+    }
+    catch(err) {console.log("Error in dnssd process", err)}
+
+    });
+  }
+  query(params) {
+    return new Promise(function (resolve, reject) {
+      try {
+        if (params.query != undefined  && params.query != '') {
+          resolve(JSONPath(params.query, JSON.parse(params.data)));
+        }
+        else {
+          if (params.data != undefined) {
+            if (typeof(params.data) == string){
+              resolve(JSON.parse(params.data));
+            }
+            else 
+            {
+              resolve(params.data)
+            }
+          }
+          else { resolve(); }
+        }
+      }
+      catch {
+        metaLog({type:LOG_TYPE.INFO, content:'Value is not JSON after processed by query: ' + params.query + ' returning as text:' + params.data});
+        resolve(params.data)
+      }
+    });
+  }
+  startListen(params, deviceId) {
+    return new Promise(function (resolve, reject) {
+      clearInterval(params.listener.timer);
+      params.listener.timer = setInterval(() => {
+        params._listenCallback(params.command, params.listener, deviceId);
+        resolve(params.command)
+      }, (params.listener.pooltime ? params.listener.pooltime : 1000));
+      if (params.listener.poolduration && (params.listener.poolduration != '')) {
+        setTimeout(() => {
+          clearInterval(params.listener.timer);
+        }, params.listener.poolduration);
+      }
+    });
+  }
+  stopListen(params) {
+    clearInterval(params.timer);
+  }
+}
+exports.dnssdProcessor = dnssdProcessor;
+
 class cliProcessor {
   initiate(connection) {
     return new Promise(function (resolve, reject) {
@@ -870,6 +957,8 @@ class cliProcessor {
   query(params) {
     return new Promise(function (resolve, reject) {
       try {
+
+
         //let resultArray = new [];
         if (params.query!=undefined) {
           if (params.query!="") {
