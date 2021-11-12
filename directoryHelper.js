@@ -23,6 +23,7 @@ class directoryHelper {
     this.feederH = [];
     this.cacheList = [];
     this.actionId = undefined;
+    this.listOffset = 0;
     this.browseHistory = [];
     this.currentFeederIndex = 0;
     this.controller = controller;
@@ -277,7 +278,7 @@ class directoryHelper {
               if (self.cacheList[i].itemtype == 'tile') {
                 let tiles = [];
                 tiles.push({
-                    thumbnailUri: self.cacheList[i].image,
+                    thumbnailUri: self.cacheList[i].image ? self.cacheList[i].image : "https://raw.githubusercontent.com/jac459/meta-core/main/pics/meta.jpg",
                     actionIdentifier: self.cacheList[i].action, //For support of index
                     uiAction: self.cacheList[i].UI ? self.cacheList[i].UI : ''
                 })
@@ -285,9 +286,9 @@ class directoryHelper {
                   //test if the next item is also a tile to put on the right, if it is not the end of the list
                   i++
                   tiles.push({
-                    thumbnailUri: self.cacheList[i].image,
+                    thumbnailUri: self.cacheList[i].image ? self.cacheList[i].image : "https://raw.githubusercontent.com/jac459/meta-core/main/pics/meta.jpg",
                     actionIdentifier: self.cacheList[i].action,
-                    uiAction: self.cacheList[i].UI ? self.cacheList[i].UI : ''
+                    uiAction: self.cacheList[i].UI ? self.cacheList[i].UI : ((self.cacheList[i].action != '' || self.cacheList[i].action != undefined) ? '' : 'reload'),
                   });
                 }
                 neeoList.addListTiles(tiles);
@@ -374,6 +375,7 @@ class directoryHelper {
             //self.cacheList, allconfigs, params, indentCommand
             let commandSet = allconfigs.commandset[indentCommand];
             let processedCommand = self.controller.vault.readVariables(commandSet.command, deviceId);
+            if (processedCommand) {processedCommand = processedCommand.replace(/\$ListOffset/g, self.listOffset);}
             processedCommand = self.controller.assignTo(BROWSEID, processedCommand, params.browseIdentifier);
             metaLog({type:LOG_TYPE.VERBOSE, content:'Final processed Command:', deviceId:deviceId});
             metaLog({type:LOG_TYPE.VERBOSE, content:processedCommand, deviceId:deviceId});
@@ -447,7 +449,6 @@ class directoryHelper {
                       'inverse' : rInverse ? self.controller.assignTo(RESULT, rInverse, oneItemResult):"",
                       'browse' : "$CommandSet="+indentCommand+"$PastQueryId=" + (self.cacheList.length)
                     };
-
                     cacheListItem = JSON.stringify(cacheListItem);
                     cacheListItem = cacheListItem.replace(/\$ListIndex/g, self.cacheList.length);
                     cacheListItem = JSON.parse(cacheListItem);
