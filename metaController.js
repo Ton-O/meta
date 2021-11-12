@@ -86,13 +86,15 @@ module.exports = function controller(driver) {
     else {
       params.queryresult = self.vault.readVariables(params.queryresult, params.deviceId);
     }
+    metaLog({deviceId:params.deviceId, type:LOG_TYPE.WARNING, content:"Addlistener:" + params.name + " /\\ "+params.command})
+
     let listIndent;
     if (params.isHub == false) { //if not a Hub, all device have to listen. 
-      metaLog({deviceId:params.deviceId, type:LOG_TYPE.VERBOSE, content:'addListener : ' + params.command});
+      metaLog({deviceId:params.deviceId, type:LOG_TYPE.WARNING, content:'addListener : ' + params.command});
       listIndent = self.listeners.findIndex((listen) => {return (listen.name == params.name && listen.command == params.command && listen.deviceId == params.deviceId)});
     } 
     else {
-      metaLog({deviceId:params.deviceId, type:LOG_TYPE.VERBOSE, content:'addListener : ' + params.command});
+      metaLog({deviceId:params.deviceId, type:LOG_TYPE.WARNING, content:'addListener : ' + params.command});
       listIndent = self.listeners.findIndex((listen) => {return (listen.name == params.name && listen.command == params.command)});
     }
 
@@ -100,11 +102,14 @@ module.exports = function controller(driver) {
       //we add the interrested devices list to this listener. Interrested concept is needed for hub listener where the observer for one device may interest other devices.
       params.interested = [];
       params.interested.push(params.deviceId);
+      metaLog({deviceId:params.deviceId, type:LOG_TYPE.WARNING, content:"Addlistener: Adding new listener"})
 
 
       if (params.evalwrite) {
          params.evalwrite.forEach(pEw => {//for dynamic devices, tracking of which variables to write on.
           pEw.deviceId = params.deviceId;
+          metaLog({deviceId:params.deviceId, type:LOG_TYPE.WARNING, content:"Addlistener: adding pEw " + pEw})
+
         }) 
       }
       if (params.evaldo) {
@@ -115,13 +120,17 @@ module.exports = function controller(driver) {
       self.listeners.push(params);
     }
     else {//we forbid addition of a new duplicate command to listen and we add the evalwrite conditions instead.
+      metaLog({deviceId:params.deviceId, type:LOG_TYPE.WARNING, content:"Addlistener: existing listener"})
+
       if (self.listeners[listIndent].interested.findIndex((interested)=>{return interested == params.deviceId})<0) {
         self.listeners[listIndent].interested.push(params.deviceId);
       }
       if (params.evalwrite) {
         params.evalwrite.forEach(pEw => {
-          let ewI = self.listeners[listIndent].evalwrite.findIndex((ew) => {return ((ew.variable == pEw.variable) && (ew.deviceId == pEw.deviceId))});
-          if (ewI < 0) {//prevent duplicate evalwrite
+          let ewI = self.listeners[listIndent].evalwrite.findIndex((ew) => {
+            return ((ew.variable == pEw.variable) && (ew.deviceId == pEw.deviceId))});
+          if (ewI < 0) {//prevent duplicate evalwrite 
+            metaLog({deviceId:params.deviceId, type:LOG_TYPE.WARNING, content:"Addlistener: pEw doesn't exist yet, adding it " + pEw})
             pEw.deviceId = params.deviceId; //for dynamic devices, tracking of which variables to write on.
             self.listeners[listIndent].evalwrite.push(pEw);
           }
@@ -129,7 +138,6 @@ module.exports = function controller(driver) {
       }
       if (params.evaldo) {
         params.evaldo.forEach(pEd => {
-          metaLog({type:LOG_TYPE.VERBOSE, content:'Trying to add a new listener evaldo' + pEd});
           let edI = self.listeners[listIndent].evaldo.findIndex((ed) => {return ((ed.variable == pEd.variable) && (ed.deviceId == pEd.deviceId))});
           if (edI < 0) {//prevent duplicate evalwrite
             pEd.deviceId = params.deviceId; //for dynamic devices, tracking of which variables to write on.
@@ -137,7 +145,9 @@ module.exports = function controller(driver) {
           }
         });
       }
+
     }
+ 
   }
 
   this.addConnection = function(params) {
@@ -234,7 +244,7 @@ module.exports = function controller(driver) {
           while (inputChain != inputChain.replace(Pattern, givenResult)) {
             inputChain = inputChain.replace(Pattern, givenResult);
           }
-          metaLog({type:LOG_TYPE.VERBOSE, content:'Assign To Before Eval. ' + inputChain});
+          metaLog({type:LOG_TYPE.DEBUG, content:'Assign To Before Eval. ' + inputChain});
           let evaluatedValue = eval(inputChain.split('DYNAMIK ')[1]);
           metaLog({type:LOG_TYPE.VERBOSE, content:'Assign To After Eval. ' + evaluatedValue});
           return evaluatedValue;
@@ -255,7 +265,7 @@ module.exports = function controller(driver) {
   
   this.evalWrite = function (evalwrite, result, deviceId) {
     metaLog({type:LOG_TYPE.VERBOSE, content:'Processing evalwrite with result ' + result, deviceId:deviceId});
-    metaLog({type:LOG_TYPE.VERBOSE, content:evalwrite, deviceId:deviceId});
+//    metaLog({type:LOG_TYPE.VERBOSE, content:evalwrite, deviceId:deviceId});
     if (evalwrite) { //case we want to write inside a variable
       evalwrite.forEach(evalW => {
         if (evalW.deviceId) {deviceId = evalW.deviceId} //this is specific for listeners and discovery, when one command should be refreshing data of multiple devices (example hue bulbs)
@@ -360,7 +370,6 @@ module.exports = function controller(driver) {
   this.initiateProcessor = function(commandtype, deviceId) { // Initiate communication protocoles
     return new Promise(function (resolve, reject) {
       self.assignProcessor(commandtype); //to get the correct processing manager.
-
       processingManager.initiate(self.getConnection(commandtype, deviceId))
         .then((result) => {
           resolve(result);
@@ -397,7 +406,7 @@ module.exports = function controller(driver) {
         metaLog({type:LOG_TYPE.VERBOSE, content:'Final command to be processed: '+command+ ' - ' + commandtype, deviceId:deviceId});
         processingManager.process(params)
           .then((result) => {
-            metaLog({type:LOG_TYPE.VERBOSE, content:'Result of the command to be processed: '+result, deviceId:deviceId});
+            metaLog({type:LOG_TYPE.DEBUG, content:'Result of the command to be processed: '+result, deviceId:deviceId});
             resolve(result);
           })
           .catch((err) => {reject (err);});
@@ -464,7 +473,7 @@ module.exports = function controller(driver) {
           promiseT.push(mypromise);
         }
         Promise.all(promiseT).then((values) => {
-          metaLog({type:LOG_TYPE.VERBOSE, content:'Result of all query processors : ' + values, deviceId:deviceId});
+          metaLog({type:LOG_TYPE.DEBUG, content:'Result of all query processors : ' + values, deviceId:deviceId});
           if (values.length == 1) {
             resolve(values[0]);
           }
@@ -555,6 +564,8 @@ module.exports = function controller(driver) {
     self.listeners.forEach((listener) => {
       if (listener.interested.includes(deviceId?deviceId:"default")) {//we start only the listeners of this device !!! Or if it is a hub. The inserted default help for "constructor" devices discovering others.
         metaLog({type:LOG_TYPE.VERBOSE, content:'Initialising the listeners of the driver.', deviceId:deviceId});
+        listener.evalwrite.forEach((evalwrite) => {
+        })
         self.listenStart(listener, deviceId?deviceId:"default");
       }
     });

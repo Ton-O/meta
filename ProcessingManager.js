@@ -19,6 +19,8 @@ const { metaMessage, LOG_TYPE } = require("./metaMessage");
 const { startsWith } = require("lodash");
 const { retry } = require("statuses");
 const { MDNSServiceDiscovery } = require('tinkerhub-mdns');
+const find = require('local-devices');
+
 
 console.error = console.info = console.debug = console.warn = console.trace = console.dir = console.dirxml = console.group = console.groupEnd = console.time = console.timeEnd = console.assert = console.profile = function() {};
 function metaLog(message) {
@@ -30,25 +32,21 @@ function metaLog(message) {
 //STRATEGY FOR THE COMMAND TO BE USED (HTTPGET, post, websocket, ...) New processor to be added here. This strategy mix both transport and data format (json, soap, ...)
 class ProcessingManager {
   constructor() {
-    console.log("clear processor")
 
     this._processor = null;
   };
   set processor(processor) {
-    console.log("Set processor",processor)
     this._processor = processor;
   };
   get processor() {
-    console.log("get processor",this.processor)
 
     return this._processor;
   }
   initiate(connection) {
-    console.log("initiate in pm.js",connection)
     return new Promise((resolve, reject) => {
       this._processor.initiate(connection)
-        .then((result) => { console.log("Okay"); resolve(result); })
-        .catch((err) => {console.log("Fail"); reject(err)});
+        .then((result) => {  resolve(result); })
+        .catch((err) => { reject(err)});
     });
   }
   process(params) {
@@ -230,6 +228,7 @@ class httpgetProcessor {
           .then(function (result) {
             if (result.data != previousResult) {
               previousResult = result.data;
+              metaLog({type:LOG_TYPE.VERBOSE, content: result.data, deviceId});
               params._listenCallback(result.data, params.listener, deviceId);
             }
             resolve('');
@@ -398,6 +397,7 @@ class webSocketProcessor {
   process(params) {
     return new Promise(function (resolve, reject) {
       metaLog({type:LOG_TYPE.VERBOSE, content:'Entering the processor:'});
+      console.log("PM.js params",params)
       if (typeof (params.command) == 'string') { params.command = JSON.parse(params.command); };
       metaLog({type:LOG_TYPE.VERBOSE, content:params.command});
       if (!params.connection) {params.connection = {}}
@@ -475,7 +475,6 @@ class webSocketProcessor {
         if (typeof (params.command) == 'string') { params.command = JSON.parse(params.command); }
         metaLog({type:LOG_TYPE.INFO, content:'Starting to listen with this params:'});
         metaLog({type:LOG_TYPE.INFO, content:params});
-        metaLog({type:LOG_TYPE.INFO, content:params.command.connection});
         if (params.command.connection)
         {
           let connectionIndex = params.connection.connections.findIndex((con)=> {return con.descriptor == params.command.connection});
@@ -516,6 +515,11 @@ class webSocketProcessor {
                   metaLog({type:LOG_TYPE.INFO, content:'Connection webSocket open.'});
                   metaLog({type:LOG_TYPE.VERBOSE, content:'New Connection Index:' + connectionIndex});
                   params.connection.connections[connectionIndex].connector.on((params.command.message?params.command.message:'message'), (result) => { 
+                    try{
+                    metaLog({type:LOG_TYPE.VERBOSE, content:"Receiving message on websocket listener " + params.connection.connections[connectionIndex].descriptor })
+                    metaLog({type:LOG_TYPE.DEBUG, content:result})
+                    }  catch (err) {console.log("error when receiving a message in websocket",err)
+                  console.log("params",params)}
                     params._listenCallback(result, params.listener, deviceId); 
                   });
                 }
@@ -854,6 +858,7 @@ exports.mDNSProcessor = mDNSProcessor;
 
 class dnssdProcessor {
   initiate(connection) {
+
     return new Promise(function (resolve, reject) {
       resolve();
     });
@@ -868,15 +873,30 @@ class dnssdProcessor {
       // Listen for services as they become available
 
       discovery.onAvailable(service => {
+
           try {
-          Services.push(service);
+              service.addresses.forEach((HostAndPort) => {
+                find(HostAndPort.host).then(MACaddr => {
+                  if (MACaddr) 
+                    HostAndPort.mac = MACaddr.mac
+                  else
+                    HostAndPort.mac = "?"
+                  Services.push(service);
+                  })
+
+              })
+  
           }
           catch(err) {console.log("Error in push process", err)}
 
       });
 
       setTimeout(() => {
+        try {
           discovery.destroy();
+        }
+        catch (err) {console.log(err)} 
+          
       resolve(Services)
       }, 3000);
 
@@ -887,6 +907,7 @@ class dnssdProcessor {
     });
   }
   query(params) {
+
     return new Promise(function (resolve, reject) {
       try {
         if (params.query != undefined  && params.query != '') {
@@ -895,7 +916,7 @@ class dnssdProcessor {
         else {
           if (params.data != undefined) {
             if (typeof(params.data) == string){
-              resolve(JSON.parse(params.data));
+                  resolve(JSON.parse(params.data));
             }
             else 
             {
@@ -912,6 +933,7 @@ class dnssdProcessor {
     });
   }
   startListen(params, deviceId) {
+
     return new Promise(function (resolve, reject) {
       clearInterval(params.listener.timer);
       params.listener.timer = setInterval(() => {
@@ -1029,11 +1051,14 @@ exports.replProcessor = replProcessor;
 class mqttProcessor {
   initiate(connection) {
     return new Promise(function (resolve, reject) {
+      resolve();
       //nothing to do, it is done globally.
       //connection.connector = mqttClient;
     }); 
   } 
   process (params) {
+//    console.log("Ton-O In mqtt process",params)
+
     return new Promise(function (resolve, reject) {
       if (typeof params.command === 'string') {params.command = JSON.parse(params.command);}
       if (params.command.message) {// here we publish into a topic
@@ -1062,6 +1087,8 @@ class mqttProcessor {
     })
   }
   query(params) {
+//    console.log("Ton-O In mqtt query",params)
+
     return new Promise(function (resolve, reject) {
       if (params.query) {
         try {

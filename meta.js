@@ -329,7 +329,7 @@ function instanciationHelper(controller, givenResult, jsonDriver) {
     }
     recontructedDriver = controller.vault.readVariables(recontructedDriver, DEFAULT);
     metaLog({type:LOG_TYPE.VERBOSE, content:'Driver has been reconstructed.'});
-    metaLog({type:LOG_TYPE.VERBOSE, content:recontructedDriver});
+    metaLog({type:LOG_TYPE.DEBUG, content:recontructedDriver});
 
     return JSON.parse(recontructedDriver);
   }
@@ -353,7 +353,7 @@ function prepareCommand(controller, commandArray, deviceId, index) {
 
 function discoveryDriverPreparator(controller, driver, deviceId) {
   return new Promise(function (resolve, reject) {
-    try {                  
+    try {        
       if (driver.discover) {
             controller.vault.retrieveValueFromDataStore("ToInitiate","default").then((ToInitiate)=>{
               if (ToInitiate == undefined) {ToInitiate = true;}
@@ -365,8 +365,8 @@ function discoveryDriverPreparator(controller, driver, deviceId) {
                   controller.commandProcessor(driver.discover.command.command, driver.discover.command.type, deviceId).then((result)=>{
                       controller.queryProcessor(result, driver.discover.command.queryresult, driver.discover.command.type, deviceId).then((result) => {
                       if (driver.discover.command.evalwrite) {controller.evalWrite(driver.discover.command.evalwrite, result, deviceId)};
-                          metaLog({deviceId: deviceId, type:LOG_TYPE.VERBOSE, content:'discovery Driver Preparation, query result'});
-                          metaLog({deviceId: deviceId, type:LOG_TYPE.VERBOSE, content:result});
+                          metaLog({deviceId: deviceId, type:LOG_TYPE.DEBUG, content:'discovery Driver Preparation, query result'});
+                          metaLog({deviceId: deviceId, type:LOG_TYPE.DEBUG, content:result});
                       if (!Array.isArray(result)) {
                         let tempo = [];
                         tempo.push(result);
@@ -576,7 +576,6 @@ function executeDriverCreation (driver, hubController, passedDeviceId) {
       if (driver.repl) {
         controller.addConnection({"name":"repl", "descriptor":driver.repl, "connector":"", "deviceId":deviceId})
       }
-    
       //Registration
       if (driver.register) {
         //need to test internal variable here.... same story than discovery my friend...
